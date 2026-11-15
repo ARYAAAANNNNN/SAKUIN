@@ -55,6 +55,29 @@ export const LoginScreen = ({
     setSuccessMsg('')
   }
 
+  const friendlyAuthError = (err) => {
+    const msg = (err?.message || '').toLowerCase()
+    if (msg.includes('invalid login credentials')) {
+      return 'Email atau password salah. Jika belum pernah mendaftar, silakan klik tab "Daftar Baru" di atas.'
+    }
+    if (msg.includes('email not confirmed')) {
+      return 'Email Anda belum dikonfirmasi. Silakan periksa inbox/spam email Anda, atau matikan opsi "Confirm email" di Supabase Dashboard agar bisa langsung masuk.'
+    }
+    if (msg.includes('user already registered')) {
+      return 'Email ini sudah terdaftar. Silakan ganti ke tab "Masuk" untuk login.'
+    }
+    if (msg.includes('password should be at least 6 characters')) {
+      return 'Password minimal 6 karakter. Harap masukkan password yang lebih panjang.'
+    }
+    if (msg.includes('provider is not enabled') || msg.includes('unsupported provider')) {
+      return 'Google OAuth belum diaktifkan di dashboard Supabase.'
+    }
+    if (msg.includes('network') || msg.includes('failed to fetch')) {
+      return 'Gagal terhubung ke server Supabase. Pastikan koneksi internet Anda aktif.'
+    }
+    return err?.message || 'Gagal memproses autentikasi. Periksa kredensial Anda.'
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setErrorMsg('')
@@ -96,7 +119,7 @@ export const LoginScreen = ({
         })
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Gagal memproses autentikasi. Periksa kredensial Anda.')
+      setErrorMsg(friendlyAuthError(err))
     } finally {
       setLoadingType(null)
     }
