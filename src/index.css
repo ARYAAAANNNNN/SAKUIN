@@ -1,0 +1,116 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+/* Custom Soft Brutalism Utilities (Gentle Pastel Aesthetic) */
+.brutal-card {
+  background-color: #ffffff;
+  border: 2px solid #27272a;
+  box-shadow: 3px 3px 0px 0px #27272a;
+  border-radius: 1.25rem;
+}
+
+:where(.dark) .brutal-card {
+  background-color: #18181b;
+  border-color: #3f3f46;
+  box-shadow: 3px 3px 0px 0px #27272a;
+}
+
+.brutal-card-sm {
+  background-color: #ffffff;
+  border: 2px solid #27272a;
+  box-shadow: 2px 2px 0px 0px #27272a;
+  border-radius: 1rem;
+}
+
+:where(.dark) .brutal-card-sm {
+  background-color: #18181b;
+  border-color: #3f3f46;
+  box-shadow: 2px 2px 0px 0px #27272a;
+}
+
+.brutal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #27272a;
+  box-shadow: 2.5px 2.5px 0px 0px #27272a;
+  font-weight: 700;
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+:where(.dark) .brutal-btn {
+  border-color: #52525b;
+  box-shadow: 2.5px 2.5px 0px 0px #27272a;
+}
+
+.brutal-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3.5px 3.5px 0px 0px #27272a;
+}
+
+:where(.dark) .brutal-btn:hover {
+  box-shadow: 3.5px 3.5px 0px 0px #3f3f46;
+}
+
+.brutal-btn:active {
+  transform: translate(1.5px, 1.5px);
+  box-shadow: 1px 1px 0px 0px #27272a;
+}
+
+:where(.dark) .brutal-btn:active {
+  box-shadow: 1px 1px 0px 0px #27272a;
+}
+
+.brutal-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 1.5px 1.5px 0px 0px #27272a;
+}
+
+:where(.dark) .brutal-btn:disabled {
+  box-shadow: 1.5px 1.5px 0px 0px #27272a;
+}
+
+.brutal-badge {
+  border: 1.5px solid #27272a;
+  box-shadow: 1.5px 1.5px 0px 0px #27272a;
+  font-weight: 700;
+}
+
+:where(.dark) .brutal-badge {
+  border-color: #52525b;
+  box-shadow: 1.5px 1.5px 0px 0px #27272a;
+}
+
+.brutal-input {
+  border: 2px solid #27272a;
+  box-shadow: 2.5px 2.5px 0px 0px #27272a;
+  transition: all 0.15s ease;
+}
+
+:where(.dark) .brutal-input {
+  border-color: #52525b;
+  box-shadow: 2.5px 2.5px 0px 0px #27272a;
+}
+
+.brutal-input:focus {
+  outline: none;
+  box-shadow: 3.5px 3.5px 0px 0px #27272a;
+  transform: translate(-1px, -1px);
+}
+
+:where(.dark) .brutal-input:focus {
+  box-shadow: 3.5px 3.5px 0px 0px #3f3f46;
+}

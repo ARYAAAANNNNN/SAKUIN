@@ -1,0 +1,47 @@
+# ===================================================
+# SAKUIN .gitignore
+# ===================================================
+
+# 1. Dependencies (Folder paket berukuran besar)
+node_modules/
+.pnp
+.pnp.js
+
+# 2. Environment Variables & Kredensial Rahasia (Supabase Keys)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+*.env
+
+# Pengecualian: Tetap simpan file template .env.example agar kolaborator tahu format variabelnya
+!.env.example
+
+# 3. Output Build Produksi
+dist/
+dist-ssr/
+build/
+*.local
+
+# 4. Debug Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 5. Editor & Sistem Operasi
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
