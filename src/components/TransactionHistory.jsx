@@ -106,6 +106,14 @@ export const TransactionHistory = ({
     }
   }
 
+  const getPageButtonClass = (pageNum) => {
+    const base = 'w-7 h-7 rounded-lg text-xs font-black border transition cursor-pointer flex items-center justify-center'
+    if (safeCurrentPage === pageNum) {
+      return `${base} bg-[#fef08a] dark:bg-amber-400 text-zinc-950 border-zinc-900 dark:border-zinc-700 shadow-[1px_1px_0px_0px_#27272a]`
+    }
+    return `${base} bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-zinc-700`
+  }
+
   return (
     <div className="brutal-card bg-white dark:bg-zinc-900 p-4 border-2 border-zinc-800 dark:border-zinc-700 shadow-[3px_3px_0px_0px_#27272a]">
       <div className="flex items-center justify-between mb-3">
@@ -284,11 +292,7 @@ export const TransactionHistory = ({
                           key={pageNum}
                           type="button"
                           onClick={() => setCurrentPage(pageNum)}
-                          className={`w-7 h-7 rounded-lg text-xs font-black border transition cursor-pointer flex items-center justify-center ${
-                            safeCurrentPage === pageNum
-                              ? 'bg-[#fef08a] dark:bg-amber-400 text-zinc-950 border-zinc-900 dark:border-zinc-700 shadow-[1px_1px_0px_0px_#27272a]'
-                              : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-zinc-700'
-                          }`}
+                          className={getPageButtonClass(pageNum)}
                         >
                           {pageNum}
                         </button>
