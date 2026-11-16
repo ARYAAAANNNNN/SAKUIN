@@ -417,6 +417,101 @@ export default function App() {
     }
   }
 
+  // Feature: Kelola Saldo Cash Cepat (Tambah, Kurangi, atau Set Saldo Riil di Tangan)
+  const handleAdjustCashBalance = async ({ mode, amount, newBalance, reason }) => {
+    if (!wallet || !session?.user?.id) return false
+    setIsSyncing(true)
+
+    try {
+      const currentSaku = Number(wallet.sisa_saku) || 0
+      let updatedSaku = currentSaku
+      let txNominal = 0
+      let txTipe = 'tabungan' // 'tabungan' (pemasukan) | 'keluar' (pengeluaran)
+      let txJudul = ''
+
+      if (mode === 'add') {
+        txNominal = Number(amount)
+        if (!txNominal || txNominal <= 0) return false
+        updatedSaku = currentSaku + txNominal
+        txTipe = 'tabungan'
+        txJudul = reason?.trim() || `Tambah Uang Cash (+${formatRupiah(txNominal)})`
+      } else if (mode === 'subtract') {
+        txNominal = Number(amount)
+        if (!txNominal || txNominal <= 0) return false
+        if (txNominal > currentSaku) {
+          showToast('error', `Saldo uang cash Anda hanya ${formatRupiah(currentSaku)}.`, 'Saldo Tidak Cukup')
+          return false
+        }
+        updatedSaku = currentSaku - txNominal
+        txTipe = 'keluar'
+        txJudul = reason?.trim() || `Kurang Uang Cash (-${formatRupiah(txNominal)})`
+      } else if (mode === 'set') {
+        const targetBal = Number(newBalance)
+        if (isNaN(targetBal) || targetBal < 0) return false
+        const diff = targetBal - currentSaku
+        if (diff === 0) {
+          showToast('info', 'Saldo yang dimasukkan sama dengan saldo saat ini.', 'Tidak Ada Perubahan')
+          return true
+        }
+        updatedSaku = targetBal
+        txNominal = Math.abs(diff)
+        if (diff > 0) {
+          txTipe = 'tabungan'
+          txJudul = reason?.trim() || `Koreksi Saldo Cash Fisik (+${formatRupiah(txNominal)})`
+        } else {
+          txTipe = 'keluar'
+          txJudul = reason?.trim() || `Koreksi Saldo Cash Fisik (-${formatRupiah(txNominal)})`
+        }
+      }
+
+      // Update Supabase wallet
+      const { data: updatedWallet, error: updateError } = await supabase
+        .from('dompet_pelajar')
+        .update({
+          sisa_saku: updatedSaku,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', session.user.id)
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+
+      // Log transaction
+      const newTx = {
+        user_id: session.user.id,
+        tanggal: formatTanggalIndo(),
+        judul: txJudul,
+        nominal: txNominal,
+        tipe: txTipe,
+        kategori: 'Lainnya',
+      }
+
+      const { data: insertedTx, error: txError } = await supabase
+        .from('riwayat_transaksi')
+        .insert([newTx])
+        .select()
+        .single()
+
+      if (txError) throw txError
+
+      setWallet(updatedWallet)
+      setTransactions((prev) => [insertedTx, ...prev])
+      showToast(
+        'success',
+        `Saldo uang cash berhasil diperbarui menjadi ${formatRupiah(updatedSaku)}!`,
+        'Saldo Cash Terupdate 💵'
+      )
+      return true
+    } catch (err) {
+      console.error(err)
+      showToast('error', err.message || 'Gagal menyesuaikan saldo uang cash.', 'Error')
+      return false
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   // Feature: Reset Saldo ke Rp0
   const handleResetBalance = async (clearHistory = false) => {
     if (!wallet || !session?.user?.id) return
@@ -902,6 +997,7 @@ export default function App() {
               todayExpense={todayExpense}
               targetGoal={targetGoal}
               onAddAllowance={handleAddAllowance}
+              onAdjustCashBalance={handleAdjustCashBalance}
               onResetBalance={handleResetBalance}
               onUpdateTarget={handleUpdateTarget}
               isLoadingAction={isLoadingWeekly}

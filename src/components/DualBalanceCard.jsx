@@ -9,6 +9,9 @@ import {
   AlertTriangle,
   Target,
   Banknote,
+  Plus,
+  Minus,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { formatRupiah } from '../lib/formatters'
 
@@ -28,6 +31,7 @@ export const DualBalanceCard = ({
   todayExpense,
   targetGoal,
   onAddAllowance,
+  onAdjustCashBalance,
   onResetBalance,
   onUpdateTarget,
   isLoadingAction,
@@ -35,6 +39,15 @@ export const DualBalanceCard = ({
   const [showAddModal, setShowAddModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [showTargetModal, setShowTargetModal] = useState(false)
+
+  // Kelola Saldo Cash Cepat (Tambah, Kurangi, atau Set Saldo Riil di Dompet)
+  const [showCashModal, setShowCashModal] = useState(false)
+  const [cashModalMode, setCashModalMode] = useState('add') // 'add' | 'subtract' | 'set'
+  const [cashAmount, setCashAmount] = useState('')
+  const [cashTargetInput, setCashTargetInput] = useState('')
+  const [cashReason, setCashReason] = useState('')
+  const [cashError, setCashError] = useState('')
+  const [isAdjustingCash, setIsAdjustingCash] = useState(false)
 
   // Tambah Uang Saku / Masuk Form state
   const [nominal, setNominal] = useState('')
@@ -123,6 +136,59 @@ export const DualBalanceCard = ({
     }
   }
 
+  const openCashModal = (mode) => {
+    setCashModalMode(mode)
+    setCashAmount('')
+    setCashReason('')
+    setCashError('')
+    if (mode === 'set') {
+      setCashTargetInput(String(sisaSaku))
+    } else {
+      setCashTargetInput('')
+    }
+    setShowCashModal(true)
+  }
+
+  const handleCashModalSubmit = async (e) => {
+    e.preventDefault()
+    setCashError('')
+
+    if (cashModalMode === 'add' || cashModalMode === 'subtract') {
+      const amt = Number(cashAmount)
+      if (!amt || amt <= 0) {
+        setCashError('Masukkan nominal yang valid.')
+        return
+      }
+      if (cashModalMode === 'subtract' && amt > sisaSaku) {
+        setCashError(`Saldo uang cash tidak mencukupi! Sisa saldo Anda hanya ${formatRupiah(sisaSaku)}.`)
+        return
+      }
+    } else if (cashModalMode === 'set') {
+      const target = Number(cashTargetInput)
+      if (isNaN(target) || target < 0) {
+        setCashError('Masukkan nominal saldo fisik yang valid.')
+        return
+      }
+    }
+
+    if (!onAdjustCashBalance) return
+
+    setIsAdjustingCash(true)
+    const ok = await onAdjustCashBalance({
+      mode: cashModalMode,
+      amount: Number(cashAmount),
+      newBalance: Number(cashTargetInput),
+      reason: cashReason,
+    })
+    setIsAdjustingCash(false)
+
+    if (ok) {
+      setShowCashModal(false)
+      setCashAmount('')
+      setCashReason('')
+    }
+  }
+
   const handleConfirmReset = async (clearHistory) => {
     setShowResetModal(false)
     await onResetBalance(clearHistory)
@@ -153,14 +219,14 @@ export const DualBalanceCard = ({
     <div className="space-y-3 mb-4">
       {/* Dual Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Card 1: Sisa Uang Saku */}
+        {/* Card 1: Saldo Uang Cash di Tangan */}
         <div className="brutal-card bg-[#fef3c7] dark:bg-[#272115] p-3.5 sm:p-4 border-2 border-zinc-800 dark:border-amber-900/60 shadow-[3px_3px_0px_0px_#27272a] relative overflow-hidden flex flex-col justify-between text-zinc-950 dark:text-amber-100">
           <div>
             <div className="flex items-center justify-between gap-1 mb-1">
               <div className="flex items-center gap-1.5 min-w-0">
                 <Wallet className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                 <span className="text-xs font-bold text-zinc-800 dark:text-amber-200 truncate">
-                  Uang Saku
+                  Uang Cash di Tangan
                 </span>
               </div>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
@@ -170,12 +236,41 @@ export const DualBalanceCard = ({
                   ? 'text-rose-700 dark:text-rose-300 bg-rose-200/80 dark:bg-rose-950/70'
                   : 'text-emerald-800 dark:text-emerald-300 bg-emerald-200/80 dark:bg-emerald-950/70'
               }`}>
-                {sisaSaku === 0 ? 'Habis' : sisaSaku <= 5000 ? 'Kritis' : 'Siap Jajan'}
+                {sisaSaku === 0 ? 'Habis' : sisaSaku <= 5000 ? 'Kritis' : 'Siap Pakai'}
               </span>
             </div>
 
-            <div className="font-display font-black text-2xl sm:text-[28px] text-zinc-950 dark:text-amber-50 tracking-tight my-1.5 truncate">
+            <div className="font-display font-black text-2xl sm:text-[28px] text-zinc-950 dark:text-amber-50 tracking-tight my-1 truncate">
               {formatRupiah(sisaSaku)}
+            </div>
+
+            {/* Quick Action Buttons on Cash Balance */}
+            <div className="flex items-center gap-1.5 my-2">
+              <button
+                type="button"
+                onClick={() => openCashModal('add')}
+                className="flex-1 py-1.5 px-2 bg-[#86efac] hover:bg-[#6ee7b7] dark:bg-emerald-500/80 dark:hover:bg-emerald-500 text-zinc-950 rounded-lg text-[11px] font-black border border-zinc-900 dark:border-zinc-700 flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-[1px_1px_0px_0px_#18181b]"
+              >
+                <Plus className="w-3 h-3 stroke-[3]" />
+                <span>+ Tambah</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openCashModal('subtract')}
+                className="flex-1 py-1.5 px-2 bg-[#fca5a5] hover:bg-[#f87171] dark:bg-rose-900/80 dark:hover:bg-rose-800 text-zinc-950 dark:text-rose-100 rounded-lg text-[11px] font-black border border-zinc-900 dark:border-zinc-700 flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-[1px_1px_0px_0px_#18181b]"
+              >
+                <Minus className="w-3 h-3 stroke-[3]" />
+                <span>- Kurang</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openCashModal('set')}
+                className="py-1.5 px-2 bg-white hover:bg-amber-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg text-[11px] font-bold border border-zinc-900 dark:border-zinc-700 flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-[1px_1px_0px_0px_#18181b]"
+                title="Sesuaikan dengan jumlah uang fisik yang ada di dompet"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span>Atur</span>
+              </button>
             </div>
           </div>
 
@@ -276,6 +371,294 @@ export const DualBalanceCard = ({
           <RotateCcw className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Modal: Kelola Saldo Cash Fisik (Tambah, Kurangi, atau Set Saldo Riil) */}
+      {showCashModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-xs">
+          <div className="brutal-card bg-white dark:bg-zinc-900 max-w-sm w-full p-5 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-800 dark:border-zinc-700 shadow-[4px_4px_0px_0px_#27272a] max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-200 dark:bg-amber-400/30 border-2 border-zinc-800 dark:border-amber-600 flex items-center justify-center text-amber-900 dark:text-amber-200 shadow-[1.5px_1.5px_0px_0px_#27272a]">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-black text-base text-zinc-900 dark:text-white">
+                  Kelola Uang Cash di Tangan
+                </h3>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Saldo tercatat saat ini: <b className="text-zinc-900 dark:text-white">{formatRupiah(sisaSaku)}</b>
+                </p>
+              </div>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div className="grid grid-cols-3 gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl border border-zinc-300 dark:border-zinc-700 mb-3 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => {
+                  setCashModalMode('add')
+                  setCashError('')
+                }}
+                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] ${
+                  cashModalMode === 'add'
+                    ? 'bg-[#86efac] text-zinc-950 font-black shadow-[1px_1px_0px_0px_#18181b]'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                + Tambah
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCashModalMode('subtract')
+                  setCashError('')
+                }}
+                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] ${
+                  cashModalMode === 'subtract'
+                    ? 'bg-[#fca5a5] text-zinc-950 font-black shadow-[1px_1px_0px_0px_#18181b]'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                - Kurangi
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCashModalMode('set')
+                  setCashTargetInput(String(sisaSaku))
+                  setCashError('')
+                }}
+                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] ${
+                  cashModalMode === 'set'
+                    ? 'bg-amber-200 dark:bg-amber-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#18181b]'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                🎯 Atur Pas
+              </button>
+            </div>
+
+            <form onSubmit={handleCashModalSubmit} className="space-y-3 text-xs">
+              {/* Tab 1: Tambah Cash */}
+              {cashModalMode === 'add' && (
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                      Nominal Uang Bertambah (Rp)
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-black text-zinc-500">
+                        Rp
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        required
+                        placeholder="Contoh: 10000"
+                        value={cashAmount}
+                        onChange={(e) => {
+                          setCashAmount(e.target.value)
+                          setCashError('')
+                        }}
+                        className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-600 pl-9 pr-3 py-2 rounded-xl text-sm font-bold placeholder:text-zinc-400"
+                      />
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-0.5">
+                      <span className="text-[10px] text-zinc-500 font-bold shrink-0">Cepat:</span>
+                      {[2000, 5000, 10000, 20000, 50000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => {
+                            const cur = Number(cashAmount) || 0
+                            setCashAmount(String(cur + amt))
+                            setCashError('')
+                          }}
+                          className="brutal-badge bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-900 dark:border-zinc-700 text-[10px] px-2 py-0.5 rounded-md cursor-pointer active:scale-95 transition"
+                        >
+                          +{amt >= 1000 ? `${amt / 1000}k` : amt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                      Catatan (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Misal: Nemu uang / dikasih kembalian"
+                      value={cashReason}
+                      onChange={(e) => setCashReason(e.target.value)}
+                      className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 rounded-xl text-xs placeholder:text-zinc-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Kurangi Cash */}
+              {cashModalMode === 'subtract' && (
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                      Nominal Uang Berkurang (Rp)
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-black text-zinc-500">
+                        Rp
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        required
+                        placeholder="Contoh: 5000"
+                        value={cashAmount}
+                        onChange={(e) => {
+                          setCashAmount(e.target.value)
+                          setCashError('')
+                        }}
+                        className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-600 pl-9 pr-3 py-2 rounded-xl text-sm font-bold placeholder:text-zinc-400"
+                      />
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-0.5">
+                      <span className="text-[10px] text-zinc-500 font-bold shrink-0">Cepat:</span>
+                      {[2000, 5000, 10000, 15000, 20000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => {
+                            const cur = Number(cashAmount) || 0
+                            setCashAmount(String(cur + amt))
+                            setCashError('')
+                          }}
+                          className="brutal-badge bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-900 dark:border-zinc-700 text-[10px] px-2 py-0.5 rounded-md cursor-pointer active:scale-95 transition"
+                        >
+                          -{amt >= 1000 ? `${amt / 1000}k` : amt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                      Catatan (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Misal: Jajan cepat / bayar parkir"
+                      value={cashReason}
+                      onChange={(e) => setCashReason(e.target.value)}
+                      className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 rounded-xl text-xs placeholder:text-zinc-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Set Saldo Riil di Dompet */}
+              {cashModalMode === 'set' && (
+                <div className="space-y-2.5">
+                  <div className="p-2.5 bg-amber-50 dark:bg-zinc-800/90 rounded-xl border border-amber-300 dark:border-zinc-700 space-y-1">
+                    <span className="text-[11px] font-bold text-amber-950 dark:text-amber-200">
+                      💡 Hitung uang cash fisik di dompetmu sekarang, lalu ketik totalnya di bawah ini:
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                      Jumlah Uang Nyata di Dompet (Rp)
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-black text-zinc-500">
+                        Rp
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        required
+                        placeholder="Contoh: 35000"
+                        value={cashTargetInput}
+                        onChange={(e) => {
+                          setCashTargetInput(e.target.value)
+                          setCashError('')
+                        }}
+                        className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-600 pl-9 pr-3 py-2 rounded-xl text-sm font-bold placeholder:text-zinc-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Kalkulasi Selisih */}
+                  {cashTargetInput !== '' && !isNaN(Number(cashTargetInput)) && (
+                    <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg border border-zinc-300 dark:border-zinc-700 text-[11px] flex items-center justify-between">
+                      <span className="text-zinc-500 font-bold">Penyesuaian:</span>
+                      <span className={`font-black ${
+                        Number(cashTargetInput) - sisaSaku > 0
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : Number(cashTargetInput) - sisaSaku < 0
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : 'text-zinc-600 dark:text-zinc-400'
+                      }`}>
+                        {Number(cashTargetInput) - sisaSaku > 0
+                          ? `+${formatRupiah(Number(cashTargetInput) - sisaSaku)} (Bertambah)`
+                          : Number(cashTargetInput) - sisaSaku < 0
+                          ? `-${formatRupiah(Math.abs(Number(cashTargetInput) - sisaSaku))} (Berkurang)`
+                          : 'Saldo Cocok (Tidak ada selisih)'}
+                      </span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                      Keterangan Koreksi (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Misal: Penyesuaian uang fisik riil di saku"
+                      value={cashReason}
+                      onChange={(e) => setCashReason(e.target.value)}
+                      className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 rounded-xl text-xs placeholder:text-zinc-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {cashError && (
+                <div className="text-[11px] text-rose-700 dark:text-rose-300 font-bold bg-rose-100 dark:bg-rose-950/80 p-2 rounded border border-rose-300 dark:border-rose-800">
+                  {cashError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCashModal(false)}
+                  className="flex-1 brutal-btn bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 py-2.5 rounded-lg font-bold border-2 border-zinc-900 dark:border-zinc-700 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAdjustingCash}
+                  className="flex-1 brutal-btn bg-amber-300 hover:bg-amber-400 dark:bg-amber-400 dark:hover:bg-amber-500 text-zinc-950 py-2.5 rounded-lg font-black border-2 border-zinc-900 dark:border-zinc-700 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {isAdjustingCash ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>
+                    {cashModalMode === 'add'
+                      ? 'Simpan Tambahan'
+                      : cashModalMode === 'subtract'
+                      ? 'Simpan Pengurangan'
+                      : 'Perbarui Saldo Riil'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Atur Target Tabungan Impian */}
       {showTargetModal && (
