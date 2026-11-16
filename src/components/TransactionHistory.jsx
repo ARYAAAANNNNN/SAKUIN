@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { History, Trash2, Loader2, PiggyBank, Receipt, ArrowDownRight } from 'lucide-react'
+import { History, Trash2, Loader2, PiggyBank, Receipt, ArrowDownRight, ArrowUpRight, QrCode } from 'lucide-react'
 import { formatRupiah, formatRelativeTime } from '../lib/formatters'
 
 export const TransactionHistory = ({
@@ -16,7 +16,8 @@ export const TransactionHistory = ({
   const filteredList = (transactions || []).filter((tx) => {
     if (filter === 'semua') return true
     if (filter === 'keluar') return tx.tipe === 'keluar'
-    if (filter === 'tabungan') return tx.tipe === 'tabungan'
+    if (filter === 'saku') return tx.tipe === 'tabungan' && tx.kategori !== 'Celengan'
+    if (filter === 'tabungan') return tx.kategori === 'Celengan' || tx.tipe === 'tabungan'
     return true
   })
 
@@ -26,31 +27,56 @@ export const TransactionHistory = ({
     const shouldRefund = refundBalance && itemToDelete.tipe === 'keluar'
     const refundAmount = shouldRefund ? Number(itemToDelete.nominal) : 0
     const wasKas = itemToDelete.kategori === 'Kas'
+    const wasCelengan = itemToDelete.kategori === 'Celengan' || itemToDelete.judul?.includes('[Ambil Celengan]')
 
     setItemToDelete(null)
-    await onDeleteTransaction(id, { refundAmount, wasKas })
+    await onDeleteTransaction(id, { refundAmount, wasKas, wasCelengan })
   }
 
   const getTransactionBadge = (tx) => {
     if (tx.tipe === 'keluar') {
+      const isFromCelengan = tx.kategori === 'Celengan' || tx.judul?.includes('[Ambil Celengan]')
       const isKas = tx.kategori === 'Kas'
+      const isSekolah = tx.judul?.includes('[Sekolah]')
+      const isHiburan = tx.judul?.includes('[Hiburan]')
+      const isBelanja = tx.judul?.includes('[Belanja]')
+
+      let icon = <ArrowDownRight className="w-4 h-4 text-rose-800 dark:text-rose-200" />
+      if (isFromCelengan) icon = '🐖'
+      else if (isKas) icon = '🗓️'
+      else if (isSekolah) icon = '✏️'
+      else if (isHiburan) icon = '🎮'
+      else if (isBelanja) icon = '🛍️'
+      else if (tx.kategori === 'Ongkos') icon = '🚌'
+      else if (tx.kategori === 'Jajan') icon = '🍟'
+
       return {
-        bg: 'bg-rose-100 dark:bg-rose-950/70 text-rose-900 dark:text-rose-200 border-rose-300 dark:border-rose-800',
+        bg: isFromCelengan
+          ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-950 dark:text-amber-200 border-amber-300 dark:border-amber-800'
+          : 'bg-rose-100 dark:bg-rose-950/70 text-rose-900 dark:text-rose-200 border-rose-300 dark:border-rose-800',
         sign: '-',
-        nominalColor: 'text-rose-700 dark:text-rose-400',
-        iconBg: isKas
+        nominalColor: isFromCelengan ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400',
+        iconBg: isFromCelengan
+          ? 'bg-emerald-200 dark:bg-emerald-400 text-zinc-950'
+          : isKas
           ? 'bg-amber-200 dark:bg-amber-400 text-zinc-950'
           : 'bg-rose-200 dark:bg-rose-400 text-zinc-950',
-        icon: isKas ? '🗓️' : tx.kategori === 'Ongkos' ? '🚌' : tx.kategori === 'Jajan' ? '🍟' : tx.kategori === 'Lainnya' ? '✏️' : <ArrowDownRight className="w-4 h-4 text-rose-800 dark:text-rose-200" />,
+        icon,
       }
     }
-    // tipe === 'tabungan'
+
+    // tipe === 'tabungan' (Pemasukan atau Tabungan)
+    const isSpecialSavings = tx.kategori === 'Celengan'
     return {
       bg: 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800',
       sign: '+',
       nominalColor: 'text-emerald-700 dark:text-emerald-400',
-      iconBg: 'bg-emerald-200 dark:bg-emerald-400 text-zinc-950',
-      icon: <PiggyBank className="w-4 h-4 text-emerald-950 dark:text-emerald-950" />,
+      iconBg: isSpecialSavings ? 'bg-emerald-200 dark:bg-emerald-400 text-zinc-950' : 'bg-amber-200 dark:bg-amber-400 text-zinc-950',
+      icon: isSpecialSavings ? (
+        <PiggyBank className="w-4 h-4 text-emerald-950 dark:text-emerald-950" />
+      ) : (
+        <ArrowUpRight className="w-4 h-4 text-amber-950 dark:text-amber-950" />
+      ),
     }
   }
 
@@ -67,11 +93,11 @@ export const TransactionHistory = ({
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-300 dark:border-zinc-700 rounded-xl mb-3 text-xs font-semibold">
+      <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-300 dark:border-zinc-700 rounded-xl mb-3 text-xs font-semibold overflow-x-auto">
         <button
           type="button"
           onClick={() => setFilter('semua')}
-          className={`flex-1 py-1.5 rounded-lg transition-all text-center cursor-pointer ${
+          className={`flex-1 min-w-[60px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'semua'
               ? 'bg-[#fef08a] dark:bg-amber-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
@@ -82,24 +108,35 @@ export const TransactionHistory = ({
         <button
           type="button"
           onClick={() => setFilter('keluar')}
-          className={`flex-1 py-1.5 rounded-lg transition-all text-center cursor-pointer ${
+          className={`flex-1 min-w-[70px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'keluar'
               ? 'bg-[#fecdd3] dark:bg-rose-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
-          Pengeluaran
+          Keluar (-)
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('saku')}
+          className={`flex-1 min-w-[70px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
+            filter === 'saku'
+              ? 'bg-[#fed7aa] dark:bg-orange-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+          }`}
+        >
+          Saku (+)
         </button>
         <button
           type="button"
           onClick={() => setFilter('tabungan')}
-          className={`flex-1 py-1.5 rounded-lg transition-all text-center cursor-pointer ${
+          className={`flex-1 min-w-[70px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'tabungan'
               ? 'bg-[#a7f3d0] dark:bg-emerald-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
-          Tabungan
+          Tabungan 🐖
         </button>
       </div>
 
@@ -116,37 +153,40 @@ export const TransactionHistory = ({
           </div>
           <div className="font-bold text-xs text-zinc-800 dark:text-zinc-200">Belum ada catatan transaksi</div>
           <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
-            Mulai catat uang saku atau pengeluaran pertamamu di atas!
+            Mulai catat uang masuk atau pengeluaran pertamamu di atas!
           </div>
         </div>
       ) : (
-        <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+        <div className="space-y-2">
           {filteredList.map((tx) => {
             const badge = getTransactionBadge(tx)
             const isDeleting = deletingId === tx.id
+            const hasQris = tx.judul?.includes('(QRIS)')
 
             return (
               <div
                 key={tx.id}
-                className="p-2.5 rounded-xl border-2 border-zinc-900 dark:border-zinc-700 bg-white dark:bg-zinc-800/80 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-between gap-2 text-xs"
+                className="p-3 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 hover:border-zinc-400 dark:hover:border-zinc-600 transition"
               >
-                {/* Left: Icon & Description */}
+                {/* Left: Icon & Info */}
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className={`w-9 h-9 rounded-lg border-2 border-zinc-900 dark:border-zinc-700 flex items-center justify-center text-sm font-bold shrink-0 ${badge.iconBg} shadow-[1.5px_1.5px_0px_0px_#18181b] dark:shadow-[1.5px_1.5px_0px_0px_#27272a]`}
-                  >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base border border-zinc-800/30 shrink-0 ${badge.iconBg}`}>
                     {badge.icon}
                   </div>
                   <div className="min-w-0">
-                    <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate text-xs">
-                      {tx.judul || tx.kategori}
+                    <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
+                      <span className="truncate">{tx.judul || tx.kategori}</span>
+                      {hasQris && (
+                        <span className="shrink-0 px-1 py-0.2 bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 rounded text-[9px] font-bold border border-sky-300 dark:border-sky-700 flex items-center gap-0.5">
+                          <QrCode className="w-2.5 h-2.5" />
+                          <span>QRIS</span>
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
-                      <span className="font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700 px-1 rounded">
-                        {tx.kategori}
-                      </span>
-                      <span>&bull;</span>
-                      <span>{tx.tanggal || formatRelativeTime(tx.created_at)}</span>
+                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      <span>{tx.tanggal}</span>
+                      <span>•</span>
+                      <span>{formatRelativeTime(tx.created_at)}</span>
                     </div>
                   </div>
                 </div>
@@ -208,7 +248,8 @@ export const TransactionHistory = ({
                   className="mt-0.5 rounded border-zinc-900 dark:border-zinc-600 accent-zinc-900"
                 />
                 <span className="text-[11px] text-zinc-800 dark:text-zinc-200 leading-snug">
-                  <b>Kembalikan saldo uang saku</b> ({formatRupiah(itemToDelete.nominal)}) karena salah catat.
+                  <b>Kembalikan saldo</b> ({formatRupiah(itemToDelete.nominal)}) ke{' '}
+                  <b>{itemToDelete.kategori === 'Celengan' || itemToDelete.judul?.includes('[Ambil Celengan]') ? 'Celengan / Tabungan' : 'Uang Saku'}</b>.
                 </span>
               </label>
             )}

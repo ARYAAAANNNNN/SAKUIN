@@ -9,12 +9,19 @@ import {
   AlertTriangle,
   Target,
   Banknote,
-  Scale,
 } from 'lucide-react'
 import { formatRupiah } from '../lib/formatters'
 
 const QUICK_ADD_OPTIONS = [10000, 20000, 50000, 100000]
 const QUICK_TARGET_OPTIONS = [50000, 100000, 250000, 500000, 1000000]
+const SUMBER_PILIHAN = [
+  { id: 'Uang Saku Rutin', label: '💵 Uang Saku Rutin' },
+  { id: 'Dikasih Ortu / THR', label: '🎁 Dikasih Ortu / THR' },
+  { id: 'Hasil Jualan / Upah', label: '💼 Jualan / Upah' },
+  { id: 'Prestasi / Lomba', label: '🏆 Prestasi / Beasiswa' },
+  { id: 'Uang Kembalian', label: '🪙 Uang Kembalian' },
+  { id: 'Lainnya', label: '🏷️ Sumber Lain' },
+]
 
 export const DualBalanceCard = ({
   wallet,
@@ -29,9 +36,12 @@ export const DualBalanceCard = ({
   const [showResetModal, setShowResetModal] = useState(false)
   const [showTargetModal, setShowTargetModal] = useState(false)
 
-  // Tambah Uang Saku Form state
+  // Tambah Uang Saku / Masuk Form state
   const [nominal, setNominal] = useState('')
-  const [alokasi, setAlokasi] = useState('saku_only') // 'saku_only' | 'split_50_50'
+  const [alokasi, setAlokasi] = useState('saku_only') // 'saku_only' | 'celengan_only' | 'split_50_50' | 'custom'
+  const [customPercent, setCustomPercent] = useState(30) // Persen masuk celengan (0 - 100)
+  const [customSavingsInput, setCustomSavingsInput] = useState('') // Input langsung nominal celengan
+  const [sumberPemasukan, setSumberPemasukan] = useState('Uang Saku Rutin')
   const [keterangan, setKeterangan] = useState('')
   const [resetKas, setResetKas] = useState(false)
   const [formError, setFormError] = useState('')
@@ -51,15 +61,37 @@ export const DualBalanceCard = ({
   const remaining = Math.max(0, targetAmount - totalCelengan)
   const isGoalReached = totalCelengan >= targetAmount && targetAmount > 0
 
+  // Kalkulasi dinamis pembagian uang masuk
+  const numNominal = Number(nominal) || 0
+  let calcSaku = 0
+  let calcCelengan = 0
+
+  if (alokasi === 'saku_only') {
+    calcSaku = numNominal
+    calcCelengan = 0
+  } else if (alokasi === 'celengan_only') {
+    calcSaku = 0
+    calcCelengan = numNominal
+  } else if (alokasi === 'split_50_50') {
+    calcSaku = Math.round(numNominal / 2)
+    calcCelengan = numNominal - calcSaku
+  } else if (alokasi === 'custom') {
+    if (customSavingsInput !== '') {
+      const manualCel = Math.min(numNominal, Math.max(0, Number(customSavingsInput) || 0))
+      calcCelengan = manualCel
+      calcSaku = Math.max(0, numNominal - manualCel)
+    } else {
+      calcCelengan = Math.round((numNominal * customPercent) / 100)
+      calcSaku = Math.max(0, numNominal - calcCelengan)
+    }
+  }
+
   const handleQuickChip = (amt) => {
     setNominal(String(amt))
     setFormError('')
-    if (amt >= 50000) {
+    if (amt >= 50000 && alokasi === 'saku_only') {
       setAlokasi('split_50_50')
       setResetKas(true)
-    } else {
-      setAlokasi('saku_only')
-      setResetKas(false)
     }
   }
 
@@ -76,12 +108,16 @@ export const DualBalanceCard = ({
     const ok = await onAddAllowance({
       nominal: num,
       alokasi,
-      keterangan: keterangan.trim() || (alokasi === 'split_50_50' ? 'Uang saku mingguan (Bagi 50:50)' : 'Uang saku jajan'),
+      sumberPemasukan,
+      customSakuAmount: calcSaku,
+      customCelenganAmount: calcCelengan,
+      keterangan: keterangan.trim() || `${sumberPemasukan} (${alokasi === 'saku_only' ? '100% Saku' : alokasi === 'celengan_only' ? '100% Celengan' : alokasi === 'split_50_50' ? 'Bagi 50:50' : `Kustom: ${formatRupiah(calcSaku)} Saku, ${formatRupiah(calcCelengan)} Celengan`})`,
       resetKas,
     })
 
     if (ok) {
       setNominal('')
+      setCustomSavingsInput('')
       setKeterangan('')
       setShowAddModal(false)
     }
@@ -366,7 +402,7 @@ export const DualBalanceCard = ({
               </div>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleAddSubmit} className="space-y-3.5 text-xs">
               {/* Input Nominal */}
               <div>
                 <div className="flex justify-between items-center mb-1">
@@ -398,7 +434,7 @@ export const DualBalanceCard = ({
                 </div>
 
                 {/* Quick Chips */}
-                <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-0.5">
                   <span className="text-[10px] text-zinc-500 font-bold shrink-0">Cepat:</span>
                   {QUICK_ADD_OPTIONS.map((amt) => (
                     <button
@@ -413,79 +449,261 @@ export const DualBalanceCard = ({
                 </div>
               </div>
 
-              {/* Mode Alokasi */}
+              {/* Sumber Pemasukan */}
               <div>
                 <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Pilihan Pembagian
+                  Sumber Uang Masuk
                 </label>
-                <div className="space-y-1.5">
-                  <label
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {SUMBER_PILIHAN.map((sumber) => {
+                    const isSelected = sumberPemasukan === sumber.id
+                    return (
+                      <button
+                        key={sumber.id}
+                        type="button"
+                        onClick={() => setSumberPemasukan(sumber.id)}
+                        className={`p-1.5 rounded-lg border text-left text-[11px] font-bold transition flex items-center gap-1 cursor-pointer truncate ${
+                          isSelected
+                            ? 'bg-amber-200 dark:bg-amber-400/40 border-zinc-900 dark:border-amber-400 text-zinc-950 dark:text-amber-100 shadow-[1px_1px_0px_0px_#18181b]'
+                            : 'bg-zinc-50 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                        }`}
+                      >
+                        <span className="truncate">{sumber.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Mode Alokasi & Pembagian */}
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300">
+                    Pilihan Pembagian (Saku vs Tabungan)
+                  </label>
+                  {alokasi === 'custom' && (
+                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                      Bebas Diatur
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  {/* Opsi 1: 100% Saku */}
+                  <button
+                    type="button"
                     onClick={() => {
                       setAlokasi('saku_only')
                       setResetKas(false)
                     }}
-                    className={`p-2.5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition ${
+                    className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex flex-col justify-between ${
                       alokasi === 'saku_only'
                         ? 'bg-amber-200 dark:bg-amber-400/30 border-zinc-900 dark:border-amber-500 shadow-[2px_2px_0px_0px_#18181b]'
-                        : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-900 dark:border-zinc-700 opacity-80'
+                        : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-800 dark:border-zinc-700 opacity-80'
                     }`}
                   >
-                    <div>
-                      <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                        <span>🍟 100% Uang Saku</span>
-                        <span className="text-[9px] bg-white dark:bg-zinc-900 px-1 py-0.2 rounded border border-zinc-900">
-                          Harian
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-zinc-600 dark:text-zinc-400">
-                        Seluruh nominal masuk ke sisa uang saku jajan.
-                      </div>
+                    <div className="font-black text-xs text-zinc-950 dark:text-zinc-100 flex items-center justify-between">
+                      <span>🍟 100% Saku</span>
+                      {alokasi === 'saku_only' && <span className="w-2 h-2 rounded-full bg-amber-600" />}
                     </div>
-                    <div className={`w-4 h-4 rounded-full border-2 border-zinc-900 flex items-center justify-center ${alokasi === 'saku_only' ? 'bg-amber-400' : 'bg-white'}`}>
-                      {alokasi === 'saku_only' && <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />}
-                    </div>
-                  </label>
+                    <span className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 leading-tight">
+                      Seluruhnya untuk jajan harian
+                    </span>
+                  </button>
 
-                  <label
+                  {/* Opsi 2: 100% Tabungan */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAlokasi('celengan_only')
+                      setResetKas(false)
+                    }}
+                    className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex flex-col justify-between ${
+                      alokasi === 'celengan_only'
+                        ? 'bg-emerald-200 dark:bg-emerald-400/30 border-zinc-900 dark:border-emerald-500 shadow-[2px_2px_0px_0px_#18181b]'
+                        : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-800 dark:border-zinc-700 opacity-80'
+                    }`}
+                  >
+                    <div className="font-black text-xs text-zinc-950 dark:text-zinc-100 flex items-center justify-between">
+                      <span>🐖 100% Tabungan</span>
+                      {alokasi === 'celengan_only' && <span className="w-2 h-2 rounded-full bg-emerald-600" />}
+                    </div>
+                    <span className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 leading-tight">
+                      Khusus celengan / nabung impian
+                    </span>
+                  </button>
+
+                  {/* Opsi 3: Bagi 50:50 */}
+                  <button
+                    type="button"
                     onClick={() => {
                       setAlokasi('split_50_50')
                       setResetKas(true)
                     }}
-                    className={`p-2.5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition ${
+                    className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex flex-col justify-between ${
                       alokasi === 'split_50_50'
                         ? 'bg-lime-200 dark:bg-lime-400/30 border-zinc-900 dark:border-lime-500 shadow-[2px_2px_0px_0px_#18181b]'
-                        : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-900 dark:border-zinc-700 opacity-80'
+                        : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-800 dark:border-zinc-700 opacity-80'
                     }`}
                   >
-                    <div>
-                      <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                        <span className="flex items-center gap-1.5">
-                          <Scale className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
-                          Bagi 50:50
-                        </span>
-                        <span className="text-[9px] bg-white dark:bg-zinc-900 px-1 py-0.2 rounded border border-zinc-800 dark:border-zinc-700">
-                          Mingguan
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-zinc-600 dark:text-zinc-400">
-                        50% sisa saku jajan, 50% otomatis masuk ke celengan.
-                      </div>
+                    <div className="font-black text-xs text-zinc-950 dark:text-zinc-100 flex items-center justify-between">
+                      <span>⚖️ Bagi 50:50</span>
+                      {alokasi === 'split_50_50' && <span className="w-2 h-2 rounded-full bg-lime-600" />}
                     </div>
-                    <div className={`w-4 h-4 rounded-full border-2 border-zinc-900 flex items-center justify-center ${alokasi === 'split_50_50' ? 'bg-lime-400' : 'bg-white'}`}>
-                      {alokasi === 'split_50_50' && <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />}
+                    <span className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 leading-tight">
+                      Setengah jajan, setengah tabung
+                    </span>
+                  </button>
+
+                  {/* Opsi 4: Bebas / Kustom */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAlokasi('custom')
+                    }}
+                    className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex flex-col justify-between ${
+                      alokasi === 'custom'
+                        ? 'bg-sky-200 dark:bg-sky-400/30 border-zinc-900 dark:border-sky-500 shadow-[2px_2px_0px_0px_#18181b]'
+                        : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-800 dark:border-zinc-700 opacity-80'
+                    }`}
+                  >
+                    <div className="font-black text-xs text-zinc-950 dark:text-zinc-100 flex items-center justify-between">
+                      <span>🎚️ Atur Bebas</span>
+                      {alokasi === 'custom' && <span className="w-2 h-2 rounded-full bg-sky-600" />}
                     </div>
-                  </label>
+                    <span className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 leading-tight">
+                      Bebas tentukan nominal tabungan
+                    </span>
+                  </button>
                 </div>
+
+                {/* Sub-panel Pengaturan Bebas / Kustom */}
+                {alokasi === 'custom' && (
+                  <div className="p-3 bg-sky-50 dark:bg-sky-950/40 rounded-xl border-2 border-sky-300 dark:border-sky-800 space-y-2.5 my-2">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-sky-950 dark:text-sky-200">
+                      <span>Rasio Masuk ke Tabungan:</span>
+                      <span className="px-2 py-0.5 bg-sky-200 dark:bg-sky-900 text-sky-900 dark:text-sky-100 rounded-md font-black">
+                        {customSavingsInput !== '' && numNominal > 0
+                          ? `${Math.round((calcCelengan / numNominal) * 100)}% (${formatRupiah(calcCelengan)})`
+                          : `${customPercent}% (${formatRupiah(calcCelengan)})`}
+                      </span>
+                    </div>
+
+                    {/* Slider Persen */}
+                    <div className="space-y-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={customSavingsInput !== '' && numNominal > 0 ? Math.round((calcCelengan / numNominal) * 100) : customPercent}
+                        onChange={(e) => {
+                          setCustomPercent(Number(e.target.value))
+                          setCustomSavingsInput('')
+                        }}
+                        className="w-full accent-sky-600 dark:accent-sky-400 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[9px] text-zinc-500 font-bold">
+                        <span>0% (Semua Saku)</span>
+                        <span>50:50</span>
+                        <span>100% (Semua Tabungan)</span>
+                      </div>
+                    </div>
+
+                    {/* Preset Rasio Cepat */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                      <span className="text-[9px] text-zinc-500 font-bold shrink-0">Preset:</span>
+                      {[10, 20, 30, 50, 70, 80].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => {
+                            setCustomPercent(pct)
+                            setCustomSavingsInput('')
+                          }}
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition cursor-pointer shrink-0 ${
+                            customPercent === pct && customSavingsInput === ''
+                              ? 'bg-sky-500 text-white border-sky-600'
+                              : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700'
+                          }`}
+                        >
+                          {pct}% Tabung
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Atau Input Rupiah Spesifik Tabungan */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-sky-900 dark:text-sky-300 mb-1">
+                        Atau Ketik Nominal Mau Ditabung (Rp):
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="Misal: 7000 atau 25000"
+                        value={customSavingsInput}
+                        onChange={(e) => {
+                          setCustomSavingsInput(e.target.value)
+                        }}
+                        className="w-full brutal-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-sky-300 dark:border-sky-700 px-2.5 py-1.5 rounded-lg text-xs font-bold placeholder:text-zinc-400"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Breakdown Box */}
+                {numNominal > 0 && (
+                  <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800/90 rounded-xl border border-zinc-300 dark:border-zinc-700 space-y-2">
+                    <div className="text-[10px] font-black uppercase text-zinc-500 dark:text-zinc-400 flex items-center justify-between">
+                      <span>Hasil Alokasi Saldo:</span>
+                      <span>Total: {formatRupiah(numNominal)}</span>
+                    </div>
+
+                    {/* Progress proportional bar */}
+                    <div className="h-2.5 w-full bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden flex">
+                      <div
+                        className="bg-amber-400 dark:bg-amber-500 h-full transition-all duration-200"
+                        style={{ width: `${numNominal > 0 ? (calcSaku / numNominal) * 100 : 100}%` }}
+                        title="Masuk Uang Saku"
+                      />
+                      <div
+                        className="bg-emerald-500 dark:bg-emerald-400 h-full transition-all duration-200"
+                        style={{ width: `${numNominal > 0 ? (calcCelengan / numNominal) * 100 : 0}%` }}
+                        title="Masuk Celengan"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800/60">
+                        <div className="text-[10px] text-amber-800 dark:text-amber-300 font-bold flex items-center gap-1">
+                          <span>🍟 Uang Saku:</span>
+                        </div>
+                        <div className="font-black text-zinc-900 dark:text-amber-100 mt-0.5">
+                          {formatRupiah(calcSaku)}
+                        </div>
+                      </div>
+
+                      <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800/60">
+                        <div className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold flex items-center gap-1">
+                          <span>🐖 Celengan:</span>
+                        </div>
+                        <div className="font-black text-zinc-900 dark:text-emerald-100 mt-0.5">
+                          {formatRupiah(calcCelengan)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Keterangan */}
               <div>
                 <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
-                  Catatan Sumber Uang (Opsional)
+                  Catatan Tambahan (Opsional)
                 </label>
                 <input
                   type="text"
-                  placeholder="Misal: Uang saku Senin atau Uang dari Ayah"
+                  placeholder="Misal: Uang saku Senin atau Uang dari Kakek"
                   value={keterangan}
                   onChange={(e) => setKeterangan(e.target.value)}
                   className="w-full brutal-input bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-600 px-3 py-1.5 rounded-xl text-xs placeholder:text-zinc-400"
@@ -493,13 +711,13 @@ export const DualBalanceCard = ({
               </div>
 
               {/* Opsi Reset Kas */}
-              {alokasi === 'split_50_50' && (
+              {(alokasi === 'split_50_50' || (alokasi === 'custom' && calcSaku >= 20000)) && (
                 <label className="flex items-start gap-2 bg-amber-50 dark:bg-zinc-800 p-2.5 rounded-xl border border-zinc-900 dark:border-zinc-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={resetKas}
                     onChange={(e) => setResetKas(e.target.checked)}
-                    className="mt-0.5 rounded border-zinc-900 accent-zinc-900"
+                    className="mt-0.5 rounded border-zinc-900 accent-zinc-900 cursor-pointer"
                   />
                   <span className="text-[11px] text-zinc-800 dark:text-zinc-300 leading-snug">
                     <b>Reset Kas Senin</b> ke belum lunas untuk minggu baru ini.
@@ -513,7 +731,7 @@ export const DualBalanceCard = ({
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}

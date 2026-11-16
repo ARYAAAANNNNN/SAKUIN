@@ -313,8 +313,16 @@ export default function App() {
     }
   }
 
-  // Feature 2: Tambah Uang Saku Masuk Fleksibel (Harian / Mingguan / Celengan)
-  const handleAddAllowance = async ({ nominal, alokasi, keterangan, resetKas }) => {
+  // Feature 2: Tambah Uang Masuk Fleksibel (Saku, Tabungan, 50:50, Kustom)
+  const handleAddAllowance = async ({
+    nominal,
+    alokasi,
+    sumberPemasukan = 'Uang Saku',
+    customSakuAmount,
+    customCelenganAmount,
+    keterangan,
+    resetKas,
+  }) => {
     if (!wallet || !session?.user?.id) return false
     setIsLoadingWeekly(true)
     setIsSyncing(true)
@@ -328,11 +336,16 @@ export default function App() {
 
       if (alokasi === 'saku_only') {
         addedSaku = nominal
+        addedCelengan = 0
+      } else if (alokasi === 'celengan_only') {
+        addedSaku = 0
+        addedCelengan = nominal
       } else if (alokasi === 'split_50_50') {
         addedSaku = Math.round(nominal / 2)
         addedCelengan = nominal - addedSaku
-      } else if (alokasi === 'celengan_only') {
-        addedCelengan = nominal
+      } else if (alokasi === 'custom') {
+        addedSaku = customSakuAmount !== undefined ? customSakuAmount : nominal
+        addedCelengan = customCelenganAmount !== undefined ? customCelenganAmount : 0
       }
 
       const updatedSaku = currentSaku + addedSaku
@@ -358,13 +371,24 @@ export default function App() {
       if (updateError) throw updateError
 
       // Log transaction
+      let txJudul = keterangan
+      if (!txJudul) {
+        if (alokasi === 'celengan_only') {
+          txJudul = `${sumberPemasukan} (+${formatRupiah(addedCelengan)} Celengan)`
+        } else if (alokasi === 'split_50_50' || alokasi === 'custom') {
+          txJudul = `${sumberPemasukan} (+${formatRupiah(addedSaku)} Saku, +${formatRupiah(addedCelengan)} Celengan)`
+        } else {
+          txJudul = `${sumberPemasukan} (+${formatRupiah(addedSaku)} Saku)`
+        }
+      }
+
       const newTx = {
         user_id: session.user.id,
         tanggal: formatTanggalIndo(),
-        judul: keterangan || (alokasi === 'split_50_50' ? `Uang Saku (+${formatRupiah(addedSaku)} Saku, +${formatRupiah(addedCelengan)} Celengan)` : 'Uang Saku Masuk'),
+        judul: txJudul,
         nominal,
         tipe: 'tabungan',
-        kategori: alokasi === 'saku_only' ? 'Lainnya' : 'Celengan',
+        kategori: addedCelengan > 0 ? 'Celengan' : 'Lainnya',
       }
 
       const { data: insertedTx, error: txError } = await supabase
@@ -379,7 +403,7 @@ export default function App() {
       setTransactions((prev) => [insertedTx, ...prev])
       showToast(
         'success',
-        `Berhasil mencatat uang saku masuk ${formatRupiah(nominal)}!`,
+        `Berhasil mencatat uang masuk ${formatRupiah(nominal)}! (${formatRupiah(addedSaku)} Saku, ${formatRupiah(addedCelengan)} Tabungan)`,
         'Saldo Bertambah 💵'
       )
       return true
@@ -570,13 +594,19 @@ export default function App() {
     }
   }
 
-  // Feature 4: Form Catat Pengeluaran Harian
-  const handleAddExpense = async ({ nominal, kategori, judul }) => {
+  // Feature 4: Form Catat Pengeluaran Fleksibel (Bisa Potong Saku atau Ambil Celengan)
+  const handleAddExpense = async ({ nominal, kategori, judul, sumberDana = 'saku' }) => {
     if (!wallet || !session?.user?.id) return false
     const currentSaku = Number(wallet.sisa_saku) || 0
+    const currentCelengan = Number(wallet.total_celengan) || 0
 
-    if (nominal > currentSaku) {
+    if (sumberDana === 'saku' && nominal > currentSaku) {
       showToast('error', 'Sisa uang saku tidak mencukupi untuk pengeluaran ini.', 'Saldo Kurang')
+      return false
+    }
+
+    if (sumberDana === 'celengan' && nominal > currentCelengan) {
+      showToast('error', 'Isi celengan tidak mencukupi untuk pengeluaran ini.', 'Saldo Tabungan Kurang')
       return false
     }
 
@@ -584,14 +614,16 @@ export default function App() {
     setIsSyncing(true)
 
     try {
-      const updatedSaku = currentSaku - nominal
+      const walletPayload = { updated_at: new Date().toISOString() }
+      if (sumberDana === 'celengan') {
+        walletPayload.total_celengan = currentCelengan - nominal
+      } else {
+        walletPayload.sisa_saku = currentSaku - nominal
+      }
 
       const { data: updatedWallet, error: updateError } = await supabase
         .from('dompet_pelajar')
-        .update({
-          sisa_saku: updatedSaku,
-          updated_at: new Date().toISOString(),
-        })
+        .update(walletPayload)
         .eq('user_id', session.user.id)
         .select()
         .single()
@@ -604,7 +636,7 @@ export default function App() {
         judul,
         nominal,
         tipe: 'keluar',
-        kategori,
+        kategori: sumberDana === 'celengan' ? 'Celengan' : kategori,
       }
 
       const { data: insertedTx, error: txError } = await supabase
@@ -617,7 +649,11 @@ export default function App() {
 
       setWallet(updatedWallet)
       setTransactions((prev) => [insertedTx, ...prev])
-      showToast('success', `Pengeluaran ${kategori} berhasil dicatat!`, 'Tercatat ✅')
+      showToast(
+        'success',
+        `Pengeluaran ${formatRupiah(nominal)} berhasil dipotong dari ${sumberDana === 'celengan' ? 'Celengan' : 'Uang Saku'}!`,
+        'Tercatat ✅'
+      )
       return true
     } catch (err) {
       console.error(err)
@@ -746,8 +782,8 @@ export default function App() {
     }
   }
 
-  // Feature 6: Hapus Transaksi
-  const handleDeleteTransaction = async (transactionId, { refundAmount = 0, wasKas = false }) => {
+  // Feature 6: Hapus Transaksi (Pengembalian Saldo Cerdas ke Saku atau Celengan)
+  const handleDeleteTransaction = async (transactionId, { refundAmount = 0, wasKas = false, wasCelengan = false }) => {
     if (!session?.user?.id) return
     setDeletingId(transactionId)
     setIsSyncing(true)
@@ -764,13 +800,17 @@ export default function App() {
 
       // 2. Optionally refund to wallet if requested
       if (refundAmount > 0 && wallet) {
-        const newSaku = (Number(wallet.sisa_saku) || 0) + refundAmount
         const walletPayload = {
-          sisa_saku: newSaku,
           updated_at: new Date().toISOString(),
         }
-        if (wasKas) {
-          walletPayload.kas_senin_lunas = false
+
+        if (wasCelengan) {
+          walletPayload.total_celengan = (Number(wallet.total_celengan) || 0) + refundAmount
+        } else {
+          walletPayload.sisa_saku = (Number(wallet.sisa_saku) || 0) + refundAmount
+          if (wasKas) {
+            walletPayload.kas_senin_lunas = false
+          }
         }
 
         const { data: updatedWallet, error: walletUpdateErr } = await supabase
@@ -879,6 +919,7 @@ export default function App() {
             {/* 3. Form Catat Pengeluaran */}
             <ExpenseForm
               sisaSaku={Number(wallet?.sisa_saku) || 0}
+              totalCelengan={Number(wallet?.total_celengan) || 0}
               onAddExpense={handleAddExpense}
               isSubmitting={isSubmittingExpense}
             />
