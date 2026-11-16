@@ -252,7 +252,7 @@ export const DualBalanceCard = ({
                 className="flex-1 py-1.5 px-2 bg-[#86efac] hover:bg-[#6ee7b7] dark:bg-emerald-500/80 dark:hover:bg-emerald-500 text-zinc-950 rounded-lg text-[11px] font-black border border-zinc-900 dark:border-zinc-700 flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-[1px_1px_0px_0px_#18181b]"
               >
                 <Plus className="w-3 h-3 stroke-[3]" />
-                <span>+ Tambah</span>
+                <span>Tambah</span>
               </button>
               <button
                 type="button"
@@ -260,7 +260,7 @@ export const DualBalanceCard = ({
                 className="flex-1 py-1.5 px-2 bg-[#fca5a5] hover:bg-[#f87171] dark:bg-rose-900/80 dark:hover:bg-rose-800 text-zinc-950 dark:text-rose-100 rounded-lg text-[11px] font-black border border-zinc-900 dark:border-zinc-700 flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-[1px_1px_0px_0px_#18181b]"
               >
                 <Minus className="w-3 h-3 stroke-[3]" />
-                <span>- Kurang</span>
+                <span>Kurang</span>
               </button>
               <button
                 type="button"
@@ -357,7 +357,7 @@ export const DualBalanceCard = ({
           ) : (
             <PlusCircle className="w-4 h-4 text-zinc-950" />
           )}
-          <span>+ Tambah Uang Saku Baru</span>
+          <span>Tambah Uang Saku Baru</span>
         </button>
 
         <button
@@ -399,13 +399,14 @@ export const DualBalanceCard = ({
                   setCashModalMode('add')
                   setCashError('')
                 }}
-                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] ${
+                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] flex items-center justify-center gap-1 ${
                   cashModalMode === 'add'
                     ? 'bg-[#86efac] text-zinc-950 font-black shadow-[1px_1px_0px_0px_#18181b]'
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
-                + Tambah
+                <Plus className="w-3 h-3 stroke-[3]" />
+                <span>Tambah</span>
               </button>
               <button
                 type="button"
@@ -413,13 +414,14 @@ export const DualBalanceCard = ({
                   setCashModalMode('subtract')
                   setCashError('')
                 }}
-                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] ${
+                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] flex items-center justify-center gap-1 ${
                   cashModalMode === 'subtract'
                     ? 'bg-[#fca5a5] text-zinc-950 font-black shadow-[1px_1px_0px_0px_#18181b]'
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
-                - Kurangi
+                <Minus className="w-3 h-3 stroke-[3]" />
+                <span>Kurang</span>
               </button>
               <button
                 type="button"
@@ -428,13 +430,13 @@ export const DualBalanceCard = ({
                   setCashTargetInput(String(sisaSaku))
                   setCashError('')
                 }}
-                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] ${
+                className={`py-1.5 rounded-lg transition text-center cursor-pointer text-[11px] flex items-center justify-center gap-1 ${
                   cashModalMode === 'set'
                     ? 'bg-amber-200 dark:bg-amber-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#18181b]'
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
-                🎯 Atur Pas
+                <span>🎯 Atur Pas</span>
               </button>
             </div>
 
