@@ -1,5 +1,16 @@
 import { useState } from 'react'
-import { History, Trash2, Loader2, PiggyBank, Receipt, ArrowDownRight, ArrowUpRight, QrCode } from 'lucide-react'
+import {
+  History,
+  Trash2,
+  Loader2,
+  PiggyBank,
+  Receipt,
+  ArrowDownRight,
+  ArrowUpRight,
+  QrCode,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 import { formatRupiah, formatRelativeTime } from '../lib/formatters'
 
 export const TransactionHistory = ({
@@ -9,8 +20,11 @@ export const TransactionHistory = ({
   isLoading,
 }) => {
   const [filter, setFilter] = useState('semua')
+  const [currentPage, setCurrentPage] = useState(1)
   const [itemToDelete, setItemToDelete] = useState(null)
   const [refundBalance, setRefundBalance] = useState(true)
+
+  const ITEMS_PER_PAGE = 10
 
   // Filter transactions
   const filteredList = (transactions || []).filter((tx) => {
@@ -20,6 +34,18 @@ export const TransactionHistory = ({
     if (filter === 'tabungan') return tx.kategori === 'Celengan' || tx.tipe === 'tabungan'
     return true
   })
+
+  // Pagination calculations (10 data per halaman)
+  const totalPages = Math.max(1, Math.ceil(filteredList.length / ITEMS_PER_PAGE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE
+  const endIndex = startIndex + ITEMS_PER_PAGE
+  const currentItems = filteredList.slice(startIndex, endIndex)
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter)
+    setCurrentPage(1)
+  }
 
   const confirmDelete = async () => {
     if (!itemToDelete) return
@@ -88,7 +114,7 @@ export const TransactionHistory = ({
           <span>Riwayat Aktivitas</span>
         </h3>
         <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
-          {filteredList.length} Catatan
+          {filteredList.length} Catatan {totalPages > 1 && `(Hal. ${safeCurrentPage}/${totalPages})`}
         </span>
       </div>
 
@@ -96,7 +122,7 @@ export const TransactionHistory = ({
       <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-300 dark:border-zinc-700 rounded-xl mb-3 text-xs font-semibold overflow-x-auto">
         <button
           type="button"
-          onClick={() => setFilter('semua')}
+          onClick={() => handleFilterChange('semua')}
           className={`flex-1 min-w-[60px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'semua'
               ? 'bg-[#fef08a] dark:bg-amber-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
@@ -107,7 +133,7 @@ export const TransactionHistory = ({
         </button>
         <button
           type="button"
-          onClick={() => setFilter('keluar')}
+          onClick={() => handleFilterChange('keluar')}
           className={`flex-1 min-w-[70px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'keluar'
               ? 'bg-[#fecdd3] dark:bg-rose-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
@@ -118,7 +144,7 @@ export const TransactionHistory = ({
         </button>
         <button
           type="button"
-          onClick={() => setFilter('saku')}
+          onClick={() => handleFilterChange('saku')}
           className={`flex-1 min-w-[70px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'saku'
               ? 'bg-[#fed7aa] dark:bg-orange-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
@@ -129,7 +155,7 @@ export const TransactionHistory = ({
         </button>
         <button
           type="button"
-          onClick={() => setFilter('tabungan')}
+          onClick={() => handleFilterChange('tabungan')}
           className={`flex-1 min-w-[70px] py-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${
             filter === 'tabungan'
               ? 'bg-[#a7f3d0] dark:bg-emerald-400 text-zinc-950 font-black shadow-[1px_1px_0px_0px_#27272a]'
@@ -157,71 +183,145 @@ export const TransactionHistory = ({
           </div>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filteredList.map((tx) => {
-            const badge = getTransactionBadge(tx)
-            const isDeleting = deletingId === tx.id
-            const hasQris = tx.judul?.includes('(QRIS)')
+        <>
+          <div className="space-y-2">
+            {currentItems.map((tx) => {
+              const badge = getTransactionBadge(tx)
+              const isDeleting = deletingId === tx.id
+              const hasQris = tx.judul?.includes('(QRIS)')
 
-            return (
-              <div
-                key={tx.id}
-                className="p-3 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 hover:border-zinc-400 dark:hover:border-zinc-600 transition"
-              >
-                {/* Left: Icon & Info */}
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base border border-zinc-800/30 shrink-0 ${badge.iconBg}`}>
-                    {badge.icon}
+              return (
+                <div
+                  key={tx.id}
+                  className="p-3 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 hover:border-zinc-400 dark:hover:border-zinc-600 transition"
+                >
+                  {/* Left: Icon & Info */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base border border-zinc-800/30 shrink-0 ${badge.iconBg}`}>
+                      {badge.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
+                        <span className="truncate">{tx.judul || tx.kategori}</span>
+                        {hasQris && (
+                          <span className="shrink-0 px-1 py-0.2 bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 rounded text-[9px] font-bold border border-sky-300 dark:border-sky-700 flex items-center gap-0.5">
+                            <QrCode className="w-2.5 h-2.5" />
+                            <span>QRIS</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        <span>{tx.tanggal}</span>
+                        <span>•</span>
+                        <span>{formatRelativeTime(tx.created_at)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
-                      <span className="truncate">{tx.judul || tx.kategori}</span>
-                      {hasQris && (
-                        <span className="shrink-0 px-1 py-0.2 bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 rounded text-[9px] font-bold border border-sky-300 dark:border-sky-700 flex items-center gap-0.5">
-                          <QrCode className="w-2.5 h-2.5" />
-                          <span>QRIS</span>
-                        </span>
+
+                  {/* Right: Nominal & Delete Action */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <div className={`font-display font-black text-xs sm:text-sm ${badge.nominalColor}`}>
+                        {badge.sign}
+                        {formatRupiah(tx.nominal)}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemToDelete(tx)
+                        setRefundBalance(true)
+                      }}
+                      disabled={isDeleting}
+                      className="p-1.5 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors border border-transparent hover:border-zinc-900 dark:hover:border-zinc-700 cursor-pointer"
+                      title="Hapus transaksi"
+                      aria-label="Hapus transaksi"
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
                       )}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                      <span>{tx.tanggal}</span>
-                      <span>•</span>
-                      <span>{formatRelativeTime(tx.created_at)}</span>
-                    </div>
+                    </button>
                   </div>
                 </div>
+              )
+            })}
+          </div>
 
-                {/* Right: Nominal & Delete Action */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-right">
-                    <div className={`font-display font-black text-xs sm:text-sm ${badge.nominalColor}`}>
-                      {badge.sign}
-                      {formatRupiah(tx.nominal)}
-                    </div>
-                  </div>
+          {/* Pagination Navigation (10 Data per Halaman) */}
+          {totalPages > 1 && (
+            <div className="mt-3.5 pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                Data <b className="text-zinc-800 dark:text-zinc-200">{startIndex + 1}–{Math.min(endIndex, filteredList.length)}</b> dari {filteredList.length}
+              </span>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setItemToDelete(tx)
-                      setRefundBalance(true)
-                    }}
-                    disabled={isDeleting}
-                    className="p-1.5 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors border border-transparent hover:border-zinc-900 dark:hover:border-zinc-700 cursor-pointer"
-                    title="Hapus transaksi"
-                    aria-label="Hapus transaksi"
-                  >
-                    {isDeleting ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
-                    ) : (
-                      <Trash2 className="w-3.5 h-3.5" />
-                    )}
-                  </button>
+              <div className="flex items-center gap-1">
+                {/* Tombol Sebelumnya */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="p-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-800 dark:text-zinc-200 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="Halaman Sebelumnya"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline text-[10px]">Prev</span>
+                </button>
+
+                {/* Nomor Halaman */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                    if (
+                      totalPages <= 5 ||
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      Math.abs(pageNum - safeCurrentPage) <= 1
+                    ) {
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-black border transition cursor-pointer flex items-center justify-center ${
+                            safeCurrentPage === pageNum
+                              ? 'bg-[#fef08a] dark:bg-amber-400 text-zinc-950 border-zinc-900 dark:border-zinc-700 shadow-[1px_1px_0px_0px_#27272a]'
+                              : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-zinc-700'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    } else if (
+                      pageNum === 2 ||
+                      pageNum === totalPages - 1
+                    ) {
+                      return (
+                        <span key={pageNum} className="text-zinc-400 text-xs px-0.5">
+                          ...
+                        </span>
+                      )
+                    }
+                    return null
+                  })}
                 </div>
+
+                {/* Tombol Selanjutnya */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="p-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-800 dark:text-zinc-200 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="Halaman Selanjutnya"
+                >
+                  <span className="hidden sm:inline text-[10px]">Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Delete Confirmation Modal */}
