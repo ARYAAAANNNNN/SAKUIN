@@ -16,6 +16,10 @@ import {
   ShieldAlert,
   PiggyBank,
   Coins,
+  KeyRound,
+  ArrowRight,
+  RefreshCw,
+  HelpCircle,
 } from 'lucide-react'
 import { SupabaseSetupBanner } from './SupabaseSetupBanner'
 import { ThemeToggle } from './ThemeToggle'
@@ -25,6 +29,8 @@ export const LoginScreen = ({
   onLoginWithGoogle,
   onLoginWithEmail,
   onSignUpWithEmail,
+  onResetPassword,
+  onResendVerification,
   darkMode,
   onToggleTheme,
 }) => {
@@ -32,11 +38,28 @@ export const LoginScreen = ({
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [loadingType, setLoadingType] = useState(null) // 'email' | 'google' | null
   const [errorMsg, setErrorMsg] = useState('')
+  const [isUnconfirmedEmail, setIsUnconfirmedEmail] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [registrationSuccessData, setRegistrationSuccessData] = useState(null)
+
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [isSendingForgot, setIsSendingForgot] = useState(false)
+  const [forgotSuccessMsg, setForgotSuccessMsg] = useState('')
+  const [forgotErrorMsg, setForgotErrorMsg] = useState('')
+
+  // Resend verification email state
+  const [isResending, setIsResending] = useState(false)
+  const [resendStatusMsg, setResendStatusMsg] = useState('')
+
+  // Google setup modal
   const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [copiedField, setCopiedField] = useState(null)
 
@@ -53,6 +76,9 @@ export const LoginScreen = ({
     setActiveTab(tab)
     setErrorMsg('')
     setSuccessMsg('')
+    setIsUnconfirmedEmail(false)
+    setResendStatusMsg('')
+    setRegistrationSuccessData(null)
   }
 
   const friendlyAuthError = (err) => {
@@ -61,10 +87,11 @@ export const LoginScreen = ({
       return 'Email atau password salah. Jika belum pernah mendaftar, silakan klik tab "Daftar Baru" di atas.'
     }
     if (msg.includes('email not confirmed')) {
-      return 'Email Anda belum dikonfirmasi. Silakan periksa inbox/spam email Anda, atau matikan opsi "Confirm email" di Supabase Dashboard agar bisa langsung masuk.'
+      setIsUnconfirmedEmail(true)
+      return 'Email Anda belum dikonfirmasi. Silakan periksa inbox/spam email Anda, atau gunakan tombol di bawah untuk kirim ulang email verifikasi.'
     }
     if (msg.includes('user already registered')) {
-      return 'Email ini sudah terdaftar. Silakan ganti ke tab "Masuk" untuk login.'
+      return 'Email ini sudah pernah terdaftar! Silakan beralih ke tab "Masuk" untuk login.'
     }
     if (msg.includes('password should be at least 6 characters')) {
       return 'Password minimal 6 karakter. Harap masukkan password yang lebih panjang.'
@@ -82,9 +109,13 @@ export const LoginScreen = ({
     e.preventDefault()
     setErrorMsg('')
     setSuccessMsg('')
+    setIsUnconfirmedEmail(false)
+    setResendStatusMsg('')
 
-    if (!email || !password) {
-      setErrorMsg('Harap isi email dan password.')
+    const cleanEmail = email.trim()
+
+    if (!cleanEmail || !password) {
+      setErrorMsg('Harap isi alamat email dan password.')
       return
     }
 
@@ -93,28 +124,39 @@ export const LoginScreen = ({
       return
     }
 
-    if (activeTab === 'daftar' && !fullName.trim()) {
-      setErrorMsg('Harap masukkan nama lengkap pelajar.')
-      return
+    if (activeTab === 'daftar') {
+      if (!fullName.trim()) {
+        setErrorMsg('Harap masukkan nama lengkap pelajar.')
+        return
+      }
+
+      if (password !== confirmPassword) {
+        setErrorMsg('Konfirmasi password tidak cocok! Pastikan kolom password dan ulangi password sama persis.')
+        return
+      }
     }
 
     setLoadingType('email')
     try {
       if (activeTab === 'daftar') {
         const result = await onSignUpWithEmail({
-          email: email.trim(),
+          email: cleanEmail,
           password,
           namaLengkap: fullName.trim(),
         })
 
         if (result?.requiresEmailVerification) {
+          setRegistrationSuccessData({
+            email: cleanEmail,
+            namaLengkap: fullName.trim(),
+          })
           setSuccessMsg(
-            'Pendaftaran berhasil! Cek kotak masuk/spam email Anda untuk konfirmasi aktivasi akun, atau coba login langsung jika konfirmasi email dimatikan di Supabase.'
+            'Pendaftaran berhasil! Akun Anda telah terdaftar di sistem SAKUIN.'
           )
         }
       } else {
         await onLoginWithEmail({
-          email: email.trim(),
+          email: cleanEmail,
           password,
         })
       }
@@ -125,13 +167,76 @@ export const LoginScreen = ({
     }
   }
 
+  // Pindah langsung ke tab login setelah registrasi
+  const handleProceedToLogin = () => {
+    setActiveTab('masuk')
+    setPassword('')
+    setConfirmPassword('')
+    setErrorMsg('')
+    setSuccessMsg('Silakan masukkan password yang baru saja Anda daftarkan untuk masuk.')
+    setRegistrationSuccessData(null)
+  }
+
+  // Kirim ulang email verifikasi
+  const handleResendConfirm = async (targetEmail) => {
+    const toSend = targetEmail || email.trim()
+    if (!toSend) {
+      setErrorMsg('Harap isi alamat email terlebih dahulu.')
+      return
+    }
+
+    setIsResending(true)
+    setResendStatusMsg('')
+    try {
+      if (onResendVerification) {
+        await onResendVerification(toSend)
+        setResendStatusMsg(`Email verifikasi berhasil dikirim ulang ke ${toSend}. Silakan cek inbox atau spam!`)
+      } else {
+        setResendStatusMsg('Fitur kirim ulang email verifikasi tidak tersedia.')
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Gagal mengirim ulang email verifikasi.')
+    } finally {
+      setIsResending(false)
+    }
+  }
+
+  // Handler Lupa Password
+  const handleSendForgotPassword = async (e) => {
+    e.preventDefault()
+    setForgotErrorMsg('')
+    setForgotSuccessMsg('')
+
+    const cleanForgotEmail = forgotEmail.trim()
+    if (!cleanForgotEmail) {
+      setForgotErrorMsg('Harap masukkan alamat email.')
+      return
+    }
+
+    setIsSendingForgot(true)
+    try {
+      if (onResetPassword) {
+        await onResetPassword(cleanForgotEmail)
+        setForgotSuccessMsg(
+          `Tautan pemulihan password telah dikirim ke ${cleanForgotEmail}. Periksa inbox atau folder spam Anda!`
+        )
+      } else {
+        setForgotErrorMsg('Layanan reset password belum aktif.')
+      }
+    } catch (err) {
+      setForgotErrorMsg(err.message || 'Gagal mengirim email reset password.')
+    } finally {
+      setIsSendingForgot(false)
+    }
+  }
+
   const handleGoogleLogin = async () => {
     setErrorMsg('')
     setSuccessMsg('')
+    setIsUnconfirmedEmail(false)
     setLoadingType('google')
 
     try {
-      // 1. Cek dulu status provider Google di Supabase untuk mencegah layar mentah 400 Bad Request
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
       if (supabaseUrl) {
         try {
@@ -140,7 +245,10 @@ export const LoginScreen = ({
           })
           if (testRes.status === 400) {
             const errData = await testRes.json().catch(() => ({}))
-            if (errData?.msg?.toLowerCase().includes('provider is not enabled') || errData?.error_code === 'validation_failed') {
+            if (
+              errData?.msg?.toLowerCase().includes('provider is not enabled') ||
+              errData?.error_code === 'validation_failed'
+            ) {
               setShowGoogleModal(true)
               setErrorMsg('Google OAuth belum diaktifkan di dashboard Supabase proyek Anda.')
               setLoadingType(null)
@@ -148,15 +256,17 @@ export const LoginScreen = ({
             }
           }
         } catch {
-          // Jika pre-flight fetch diblokir CORS, lanjut ke alur redirect normal
+          // Abaikan CORS pre-flight, lanjut ke alur normal
         }
       }
 
-      // 2. Jalankan signInWithOAuth
       await onLoginWithGoogle()
     } catch (err) {
       const msg = err.message || ''
-      if (msg.toLowerCase().includes('provider is not enabled') || msg.toLowerCase().includes('unsupported provider')) {
+      if (
+        msg.toLowerCase().includes('provider is not enabled') ||
+        msg.toLowerCase().includes('unsupported provider')
+      ) {
         setShowGoogleModal(true)
         setErrorMsg('Google Provider belum diaktifkan di Supabase Dashboard Anda.')
       } else {
@@ -225,27 +335,100 @@ export const LoginScreen = ({
             </button>
           </div>
 
-          {/* Inline Alert / Feedback */}
-          {errorMsg && (
-            <div className="mb-3.5 p-2.5 bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-300 dark:border-rose-700 rounded-xl text-xs text-rose-950 dark:text-rose-200 font-bold flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
-              <div className="flex-1 leading-snug">
-                <div>{errorMsg}</div>
-                {showGoogleModal && (
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleModal(true)}
-                    className="mt-1 text-[11px] underline font-extrabold text-rose-800 dark:text-rose-300 flex items-center gap-1 cursor-pointer"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                    <span>Klik di sini untuk panduan aktifkan Google di Supabase</span>
-                  </button>
-                )}
+          {/* Special Post-Registration Success Card */}
+          {registrationSuccessData && (
+            <div className="mb-4 p-3.5 bg-emerald-50 dark:bg-emerald-950/70 border-2 border-emerald-600 rounded-xl">
+              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-black text-sm mb-1.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>🎉 Akun Berhasil Didaftarkan!</span>
+              </div>
+              <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed mb-3">
+                Akun untuk <span className="font-bold underline">{registrationSuccessData.email}</span> sudah siap.
+                Silakan langsung klik tombol di bawah untuk masuk ke dompet Anda:
+              </p>
+              <button
+                type="button"
+                onClick={handleProceedToLogin}
+                className="w-full brutal-btn bg-emerald-400 hover:bg-emerald-500 text-zinc-950 py-2.5 px-3 rounded-lg border-2 border-zinc-900 font-black text-xs flex items-center justify-center gap-2 shadow-[2px_2px_0px_0px_#27272a] cursor-pointer"
+              >
+                <span>Masuk dengan Akun Ini Sekarang</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <div className="mt-2.5 pt-2 border-t border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-[11px] text-zinc-600 dark:text-zinc-400">
+                <span>Perlu verifikasi email?</span>
+                <button
+                  type="button"
+                  onClick={() => handleResendConfirm(registrationSuccessData.email)}
+                  disabled={isResending}
+                  className="font-bold text-emerald-700 dark:text-emerald-300 underline hover:opacity-80 cursor-pointer flex items-center gap-1"
+                >
+                  {isResending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  <span>Kirim Ulang Email</span>
+                </button>
               </div>
             </div>
           )}
 
-          {successMsg && (
+          {/* Inline Error Alert */}
+          {errorMsg && (
+            <div className="mb-3.5 p-3 bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-400 dark:border-rose-700 rounded-xl text-xs text-rose-950 dark:text-rose-200 font-bold">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                <div className="flex-1 leading-snug">
+                  <div>{errorMsg}</div>
+
+                  {/* Tombol aksi cepat jika belum terdaftar */}
+                  {activeTab === 'masuk' && errorMsg.includes('invalid login credentials') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetFormState('daftar')
+                      }}
+                      className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 bg-amber-200 dark:bg-amber-900/60 text-zinc-900 dark:text-amber-100 rounded-md border border-zinc-800 text-[11px] font-extrabold cursor-pointer hover:bg-amber-300 transition"
+                    >
+                      <span>Belum punya akun? Buat akun di sini</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+
+                  {/* Tombol kirim ulang email verifikasi */}
+                  {isUnconfirmedEmail && (
+                    <button
+                      type="button"
+                      onClick={() => handleResendConfirm(email)}
+                      disabled={isResending}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-200 dark:bg-emerald-900/70 text-zinc-950 dark:text-emerald-100 rounded-md border border-zinc-800 text-[11px] font-extrabold cursor-pointer hover:bg-emerald-300 transition"
+                    >
+                      {isResending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      <span>Kirim Ulang Email Konfirmasi</span>
+                    </button>
+                  )}
+
+                  {showGoogleModal && (
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleModal(true)}
+                      className="mt-1 text-[11px] underline font-extrabold text-rose-800 dark:text-rose-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                      <span>Klik di sini untuk panduan aktifkan Google di Supabase</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Feedback status kirim ulang email */}
+          {resendStatusMsg && (
+            <div className="mb-3.5 p-2.5 bg-emerald-50 dark:bg-emerald-950/70 border-2 border-emerald-500 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span>{resendStatusMsg}</span>
+            </div>
+          )}
+
+          {/* Success Banner */}
+          {successMsg && !registrationSuccessData && (
             <div className="mb-3.5 p-2.5 bg-emerald-100 dark:bg-emerald-950/70 border-2 border-zinc-900 dark:border-emerald-600 rounded-xl text-xs text-emerald-950 dark:text-emerald-200 font-bold flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
               <span className="leading-snug">{successMsg}</span>
@@ -298,9 +481,26 @@ export const LoginScreen = ({
 
             {/* Password Input */}
             <div>
-              <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
-                Password {activeTab === 'daftar' && <span className="font-normal">(Min. 6 Karakter)</span>}
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300">
+                  Password {activeTab === 'daftar' && <span className="font-normal">(Min. 6 Karakter)</span>}
+                </label>
+                {activeTab === 'masuk' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotEmail(email)
+                      setForgotErrorMsg('')
+                      setForgotSuccessMsg('')
+                      setShowForgotModal(true)
+                    }}
+                    className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <KeyRound className="w-3 h-3" />
+                    <span>Lupa password?</span>
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
                   <Lock className="w-4 h-4" />
@@ -325,11 +525,59 @@ export const LoginScreen = ({
               </div>
             </div>
 
+            {/* Konfirmasi Password (Khusus Mode Daftar) */}
+            {activeTab === 'daftar' && (
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                  Ulangi Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Ketik ulang password di atas"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={`w-full brutal-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 pl-9 pr-10 py-2 rounded-xl text-xs font-semibold placeholder:text-zinc-400 dark:placeholder:text-zinc-500 ${
+                      confirmPassword && confirmPassword !== password
+                        ? 'border-rose-500 dark:border-rose-500'
+                        : confirmPassword && confirmPassword === password
+                        ? 'border-emerald-500 dark:border-emerald-500'
+                        : 'border-zinc-900 dark:border-zinc-600'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Sembunyikan password' : 'Lihat password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {confirmPassword && confirmPassword !== password && (
+                  <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 mt-1">
+                    Password tidak sama!
+                  </p>
+                )}
+                {confirmPassword && confirmPassword === password && (
+                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    <span>Password cocok</span>
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Submit Button Utama */}
             <button
               type="submit"
               disabled={loadingType !== null}
-              className="w-full brutal-btn py-3 px-4 rounded-xl font-black text-sm border-2 border-zinc-800 dark:border-zinc-700 bg-[#86efac] hover:bg-[#6ee7b7] text-zinc-950 shadow-[3px_3px_0px_0px_#27272a] active:translate-y-0.5 active:shadow-none transition flex items-center justify-center gap-2 cursor-pointer mt-1"
+              className="w-full brutal-btn py-3 px-4 rounded-xl font-black text-sm border-2 border-zinc-800 dark:border-zinc-700 bg-[#86efac] hover:bg-[#6ee7b7] text-zinc-950 shadow-[3px_3px_0px_0px_#27272a] active:translate-y-0.5 active:shadow-none transition flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               {loadingType === 'email' ? (
                 <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
@@ -339,7 +587,7 @@ export const LoginScreen = ({
                   ? 'Memproses...'
                   : activeTab === 'masuk'
                   ? 'Masuk ke Dompetku'
-                  : 'Buat Akun Sakuin'}
+                  : 'Daftar Akun SAKUIN'}
               </span>
             </button>
           </form>
@@ -402,7 +650,85 @@ export const LoginScreen = ({
         </div>
       </div>
 
-      {/* Google Setup Guidance Modal (If Google is not enabled yet in Supabase) */}
+      {/* 5. Modal Lupa Password */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/75 backdrop-blur-xs">
+          <div className="brutal-card bg-white dark:bg-zinc-900 max-w-sm w-full p-5 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-700 shadow-[4px_4px_0px_0px_#18181b] dark:shadow-[4px_4px_0px_0px_#27272a]">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-zinc-900 dark:border-zinc-700 mb-3">
+              <div className="flex items-center gap-2 font-display font-black text-sm uppercase text-amber-600 dark:text-amber-400">
+                <KeyRound className="w-5 h-5" />
+                <span>Reset Password</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="p-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-white rounded cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed mb-3">
+              Masukkan alamat email akun SAKUIN Anda. Kami akan mengirimkan tautan untuk membuat password baru.
+            </p>
+
+            {forgotErrorMsg && (
+              <div className="mb-3 p-2 bg-rose-50 dark:bg-rose-950/70 border border-rose-300 dark:border-rose-700 rounded-lg text-xs text-rose-900 dark:text-rose-200 font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{forgotErrorMsg}</span>
+              </div>
+            )}
+
+            {forgotSuccessMsg && (
+              <div className="mb-3 p-2.5 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-500 rounded-lg text-xs text-emerald-900 dark:text-emerald-200 font-bold flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span className="leading-snug">{forgotSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSendForgotPassword} className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase text-zinc-700 dark:text-zinc-300 mb-1">
+                  Email Akun
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    placeholder="pelajar@sekolah.sch.id"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full brutal-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-600 pl-9 pr-3 py-2 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  className="flex-1 py-2 px-3 border-2 border-zinc-900 dark:border-zinc-600 rounded-xl text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  Tutup
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingForgot}
+                  className="flex-1 brutal-btn py-2 px-3 bg-amber-300 hover:bg-amber-400 text-zinc-950 border-2 border-zinc-900 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-[2px_2px_0px_0px_#27272a] cursor-pointer"
+                >
+                  {isSendingForgot ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>{isSendingForgot ? 'Mengirim...' : 'Kirim Link'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Google Setup Guidance Modal (If Google is not enabled yet in Supabase) */}
       {showGoogleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/75 backdrop-blur-xs">
           <div className="brutal-card bg-white dark:bg-zinc-900 max-w-sm w-full p-5 text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-700 shadow-[4px_4px_0px_0px_#18181b] dark:shadow-[4px_4px_0px_0px_#27272a]">
@@ -473,8 +799,9 @@ export const LoginScreen = ({
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
 
-            <div className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400 text-center">
-              Setelah tombol <b>Save</b> di Supabase ditekan, tutup popup ini dan coba klik lagi!
+            <div className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400 text-center flex items-center justify-center gap-1">
+              <HelpCircle className="w-3 h-3 shrink-0" />
+              <span>Setelah Save di Supabase, tutup popup ini dan klik tombol Google!</span>
             </div>
           </div>
         </div>

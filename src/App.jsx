@@ -296,6 +296,40 @@ export default function App() {
     }
   }
 
+  // Password Reset Handler
+  const handleResetPassword = async (email) => {
+    if (!isSupabaseConfigured) {
+      showToast('info', 'Harap lengkapi file .env terlebih dahulu.', 'Setup Diperlukan')
+      throw new Error('Supabase belum dikonfigurasi.')
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    })
+
+    if (error) throw error
+    return { success: true }
+  }
+
+  // Resend Email Verification Handler
+  const handleResendVerification = async (email) => {
+    if (!isSupabaseConfigured) {
+      showToast('info', 'Harap lengkapi file .env terlebih dahulu.', 'Setup Diperlukan')
+      throw new Error('Supabase belum dikonfigurasi.')
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    })
+
+    if (error) throw error
+    return { success: true }
+  }
+
   // Logout Handler
   const handleLogout = async () => {
     try {
@@ -958,6 +992,8 @@ export default function App() {
           onLoginWithGoogle={handleLoginWithGoogle}
           onLoginWithEmail={handleLoginWithEmail}
           onSignUpWithEmail={handleSignUpWithEmail}
+          onResetPassword={handleResetPassword}
+          onResendVerification={handleResendVerification}
           darkMode={darkMode}
           onToggleTheme={toggleTheme}
         />
